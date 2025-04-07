@@ -39,20 +39,27 @@ var (
 
 // TerminalResponse represents the JSON structure returned by the API
 type TerminalResponse struct {
+	Status      int    `json:"status"`
 	ImageURL    string `json:"image_url"`
 	Filename    string `json:"filename"`
 	RefreshRate int    `json:"refresh_rate"`
+	ResetFirmware bool `json:"reset_firmware"`
+	UpdateFirmware bool `json:"update_firmware"`
+	FirmwareURL *string `json:"firmware_url"`
+	SpecialFunction string `json:"special_function"`
 }
 
 // Config holds application configuration
 type Config struct {
 	APIKey string
+	MACAddress string
 }
 
 // AppOptions holds command line options
 type AppOptions struct {
 	DarkMode bool
 	Verbose  bool
+	ServerIP string
 }
 
 // FramebufferLock represents the lock file structure
@@ -160,11 +167,24 @@ func main() {
 		config.APIKey = os.Getenv("TRMNL_API_KEY")
 	}
 
+	// Get MAC Address from environment, or from config file
+	if config.MACAddress == "" {
+		config.MACAddress = os.Getenv("TRMNL_MAC_ADDRESS")
+	}
+
 	// If the API key is still not set, prompt the user
 	if config.APIKey == "" {
 		fmt.Println("TRMNL API Key not found.")
 		fmt.Print("Please enter your TRMNL API Key: ")
 		fmt.Scanln(&config.APIKey)
+		saveConfig(configDir, config)
+	}
+
+	// If the MAC Address is still not set, prompt the user
+	if config.MACAddress == "" {
+		fmt.Println("TRMNL MAC Address not found.")
+		fmt.Println("Please enter your TRMNL MAC Address: ")
+		fmt.Scanln(&config.MACAddress)
 		saveConfig(configDir, config)
 	}
 
@@ -195,7 +215,7 @@ func main() {
 	clearFramebuffer()
 
 	for {
-		processNextImage(tmpDir, config.APIKey, options)
+		processNextImage(tmpDir, config.APIKey, config.MACAddress, options)
 	}
 }
 
@@ -347,7 +367,14 @@ func parseCommandLineArgs() AppOptions {
 	showVersion := flag.Bool("v", false, "Show version information")
 	verbose := flag.Bool("verbose", true, "Enable verbose output")
 	quiet := flag.Bool("q", false, "Quiet mode (disable verbose output)")
+	ipAddress := flag.String("ip", "", "Server IP Address")
 	flag.Parse()
+
+	if *ipAddress == ""{
+		fmt.Println("Error: -ip flag must be set")
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	if *showVersion {
 		fmt.Printf("trmnl-display version %s (commit: %s, built: %s)\n",
@@ -358,10 +385,11 @@ func parseCommandLineArgs() AppOptions {
 	return AppOptions{
 		DarkMode: *darkMode,
 		Verbose:  *verbose && !*quiet,
+		ServerIP: *ipAddress,
 	}
 }
 
-func processNextImage(tmpDir, apiKey string, options AppOptions) {
+func processNextImage(tmpDir, apiKey string, macAddress string, options AppOptions) {
 	// Use defer and recover to handle any panics
 	defer func() {
 		if r := recover(); r != nil {
@@ -371,7 +399,8 @@ func processNextImage(tmpDir, apiKey string, options AppOptions) {
 	}()
 
 	// Get the TRMNL display
-	req, err := http.NewRequest("GET", "https://usetrmnl.com/api/display", nil)
+	url := fmt.Sprintf("http://%s:4567/api/display", options.ServerIP)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
 		time.Sleep(60 * time.Second)
@@ -379,6 +408,7 @@ func processNextImage(tmpDir, apiKey string, options AppOptions) {
 	}
 
 	req.Header.Add("access-token", apiKey)
+	req.Header.Add("id", macAddress)
 	req.Header.Add("battery-voltage", "100.00")
 	req.Header.Add("rssi", "0")
 	req.Header.Add("User-Agent", fmt.Sprintf("trmnl-display/%s", version))
