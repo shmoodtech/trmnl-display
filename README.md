@@ -45,17 +45,22 @@ This script will automatically handle cross-compilation and upload binaries to y
 
 ## Usage
 
-Ensure your TRMNL API key is set either in the environment variable or via the interactive prompt:
+Ensure your TRMNL API key and TRMNL MAC Address is set either in the environment variable or via the interactive prompt:
 
 ```bash
 export TRMNL_API_KEY="your_api_key_here"
+export TRMNL_MAC_ADDRESS="your_mac_address_here"
 ```
 
 Run the application:
 
 ```bash
-./trmnl-display
+./trmnl-display -ip <server-ip-address>
 ```
+
+Mandatory flags:
+
+The `-ip` flag is required to run the program. It tells it where your server is running for the device to poll.
 
 Optional flags:
 
@@ -73,7 +78,7 @@ TRMNL Display stores configuration files in:
 ~/.trmnl/config.json
 ```
 
-This file will store your API key for convenience.
+This file will store your API key and MAC Address for convenience.
 
 ## Licence
 
